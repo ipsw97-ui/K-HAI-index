@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>지역별 주택구입부담지수</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { margin: 0; padding: 20px; font-family: sans-serif; }
+    .wrap { width: 100%; height: 560px; }
+    #status { font-size: 13px; color: #666; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div id="status">데이터 불러오는 중...</div>
+  <div class="wrap">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <script>
+    const API_URL = "YOUR_HF_WORKER_URL";
+
+    const formData = new URLSearchParams();
+    formData.append("displayType", "T");
+    formData.append("selCategories", "");
+    formData.append("firParam", "");
+    formData.append("deviceType", "");
+    formData.append("statblId", "T186503126543136");
+    formData.append("statId", "S235920265");
+    formData.append("statTitle", "지역별 주택구입부담지수");
+    formData.append("wrttimeMinYear", "2004");
+    formData.append("wrttimeMaxYear", "2026");
+    formData.append("wrttimeMinQt", "01");
+    formData.append("wrttimeMaxQt", "04");
+    formData.append("chartType", "");
+    formData.append("chartStockType", "");
+    formData.append("chart23Type", "2D");
+    formData.append("chartLegend", "");
+    formData.append("tabMapVal", "KOREA");
+    formData.append("topCateId", "600000");
+    formData.append("dtacycleCd", "QY");
+    formData.append("wrttimeType", "B");
+    formData.append("wrttimeStartYear", "2004");
+    formData.append("wrttimeStartQt", "01");
+    formData.append("wrttimeEndYear", "2026");
+    formData.append("wrttimeEndQt", "01");
+    formData.append("wrttimeLastestVal", "10");
+    formData.append("wrttimeOrder", "A");
+    formData.append("viewLocOpt", "B");
+    formData.append("optST", "H");
+    formData.append("optSC", "L");
+    formData.append("optSI", "H");
+    formData.append("callTag", "F");
+
+    formData.append("chkItms", "10001");
+    formData.append("chkItms", "10002");
+    formData.append("chkItms", "10005");
+    formData.append("chkItms", "10009");
+
+    formData.append("dtadvsVal", "OD");
+    formData.append("cDefSelYn", "N");
+
+    const regionMap = {
+      10001: "전국",
+      10002: "서울",
+      10005: "인천",
+      10009: "경기"
+    };
+
+    async function loadData() {
+      const status = document.getElementById("status");
+
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+        },
+        body: formData
+      });
+
+      const json = await res.json();
+      console.log("HF response:", json);
+
+      const rows = json.data?.CHART_DATA || json.CHART_DATA || [];
+
+      if (!rows.length) {
+        status.textContent = "데이터가 없습니다. Worker 또는 요청 파라미터를 확인하세요.";
+        return;
+      }
+
+      const labels = [...new Set(rows.map(r => r.WRTTIME_IDTFR_ID))]
+        .sort()
+        .map(id => `${id.slice(0, 4)}.${id.slice(4, 6)}Q`);
+
+      const datasets = Object.entries(regionMap).map(([code, name]) => {
+        const valuesByTime = {};
+
+        rows
+          .filter(r => String(r.ITM_DATANO) === String(code) && r.DTADVS_CD === "OD")
+          .forEach(r => {
+            valuesByTime[r.WRTTIME_IDTFR_ID] = Number(r.DTA_VAL);
+          });
+
+        const data = labels.map(label => {
+          const id = label.replace(".", "").replace("Q", "");
+          return valuesByTime[id] ?? null;
+        });
+
+        return {
+          label: name,
+          data,
+          fill: false,
+          tension: 0.25
+        };
+      });
+
+      status.textContent = `업데이트 완료: ${labels[0]} ~ ${labels[labels.length - 1]}`;
+
+      new Chart(document.getElementById("chart"), {
+        type: "line",
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: "지역별 주택구입부담지수"
+            },
+            legend: { position: "bottom" }
+          },
+          scales: {
+            y: {
+              title: { display: true, text: "지수" }
+            }
+          }
+        }
+      });
+    }
+
+    loadData().catch(err => {
+      console.error(err);
+      document.getElementById("status").textContent =
+        "데이터를 불러오지 못했습니다: " + err;
+    });
+  </script>
+</body>
+</html>
